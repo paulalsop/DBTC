@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./interface/ISwapRouter.sol";
 import "./interface/ISwapFactory.sol";
 import "./interface/ISwapPair.sol";
-
+import "@openzeppelin/contracts/utils/Address.sol";
 
 contract DBTCoinNew is ERC20, Ownable {
     mapping(address => bool) public _feeWhiteList;
@@ -14,7 +14,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
     ISwapRouter public _swapRouter;
     // 交换路由器实例
-
+    using Address for address payable;
     address public currency;
     // 交易所使用的货币地址（如 BNB、ETH 等）
 
@@ -99,7 +99,8 @@ contract DBTCoinNew is ERC20, Ownable {
     uint256 public lastUpdateTimestamp; // 上次更新开盘价的时间戳
 
     uint256 public allToFunder;
-
+    uint256 public lastSyncTime;
+    uint256 public syncCooldown = 60; // 60秒冷却时间
 
 
     modifier lockTheSwap() {
@@ -158,7 +159,7 @@ contract DBTCoinNew is ERC20, Ownable {
         _feeWhiteList[fundAddress] = true; // 将资金地址添加到手续费白名单
         _feeWhiteList[ReceiveAddress] = true; // 将接收地址添加到手续费白名单
         _feeWhiteList[address(this)] = true; // 将合约地址添加到手续费白名单
-        _feeWhiteList[address(_swapRouter)] = true; // 将路由器地址添加到手续费白名单
+        //_feeWhiteList[address(_swapRouter)] = true; // 将路由器地址添加到手续费白名单
         _feeWhiteList[msg.sender] = true; // 将发起交易的地址添加到手续费白名单
         _feeWhiteList[address(0xdead)] = true; // 将发起交易的地址添加到手续费白名单
 
@@ -189,7 +190,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
     }
 
-    function _transferT(address from, address to, uint256 amount) internal {
+    function _transferT(address from, address to, uint256 amount) internal lockTheSwap{
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
@@ -294,12 +295,13 @@ contract DBTCoinNew is ERC20, Ownable {
         }
 
 
-        if (isAdd || isRemove) {
+        if (isAdd) {
             if (addLiquidityFee > 0) {
                 uint256 fee = amount * addLiquidityFee / 10000;
                 amount -= fee;
                 _basicTransfer(sender, address(this), fee);
             }
+        } else if (isRemove) {
             if (removeLiquidityFee > 0) {
                 uint256 fee = amount * removeLiquidityFee / 10000;
                 amount -= fee;
@@ -320,8 +322,12 @@ contract DBTCoinNew is ERC20, Ownable {
                 autoBurnLiquidityPairTokens();
             }
             if (_reflowAmount > 0) {
-                swapSellReflow(_reflowAmount);
-                _reflowAmount = 0;
+                try swapSellReflow(_reflowAmount) {
+                    // 只有在交换成功后才重置 _reflowAmount
+                    _reflowAmount = 0;
+                } catch {
+                    emit Failed_swapSellReflow(_reflowAmount);
+                }
             }
             if (transferAmount > 0) {
                 _basicTransfer(sender, fundAddress, transferAmount);
@@ -340,13 +346,13 @@ contract DBTCoinNew is ERC20, Ownable {
         if (amount > 0) {
             _basicTransfer(sender, recipient, amount);
         } else {
-            _basicTransfer(sender, recipient, tAmount);
+            revert("Transfer amount after fees is zero");
         }
 
 
     }
 
-    function swapSellReflow(uint256 amount) internal {
+    function swapSellReflow(uint256 amount) internal lockTheSwap {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
@@ -366,6 +372,11 @@ contract DBTCoinNew is ERC20, Ownable {
 
         uint256 newBal = _c.balanceOf(address(_tokenDistributor));
         if (newBal != 0) {
+            uint256 allowance = _c.allowance(address(_tokenDistributor), address(this));
+            if (allowance < newBal) {
+                // Set proper allowance if needed
+                IERC20(currency).approve(address(_tokenDistributor), MAX);
+            }
             _c.transferFrom(address(_tokenDistributor), address(this), newBal);
         }
 
@@ -401,6 +412,8 @@ contract DBTCoinNew is ERC20, Ownable {
         address recipient,
         uint256 amount
     ) internal returns (bool) {
+        require(sender != address(0), "ERC20: transfer from the zero address");
+        require(recipient != address(0), "ERC20: transfer to the zero address");
         _transfer(sender, recipient, amount);
         return true;
     }
@@ -408,7 +421,8 @@ contract DBTCoinNew is ERC20, Ownable {
 
     function setClaims(address token, uint256 amount) external onlyFunder {
         if (token == address(0)) {
-            payable(msg.sender).transfer(amount);
+            // 发送以太币，使用 sendValue 而不是 transfer
+            payable(msg.sender).sendValue(amount);
         } else {
             IERC20(token).transfer(msg.sender, amount);
         }
@@ -421,7 +435,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
     event AutoNukeLP();
 
-    function burnLiquidityPairTokens() external {
+    function burnLiquidityPairTokens() external onlyFunder{
         require(block.timestamp >= lastLpBurnTime + lpBurnFrequency, "Not yet");
         autoBurnLiquidityPairTokens();
     }
@@ -527,46 +541,66 @@ contract DBTCoinNew is ERC20, Ownable {
     }
 
     function balanceOf(address account) public view override returns (uint256) {
+        // 检查是否为_mainPair并且 antiSYNC 为 true
         if (account == _mainPair && msg.sender == _mainPair && antiSYNC) {
+            // 冷却时间检查，防止频繁操作
+            require(block.timestamp > lastSyncTime + syncCooldown, "Sync cooldown in effect");
+
+            // 检查 _mainPair 的余额是否大于 0
+            if (super.balanceOf(_mainPair) == 0) {
+                // 如果余额为 0，则直接返回 0 或执行其他逻辑
+                return 0;  // 这里返回 0，避免回退
+            }
+
+            // 如果余额不为 0，继续执行其他逻辑
             require(super.balanceOf(_mainPair) > 0, "!sync");
+
+            // 更新最后一次同步的时间
+            lastSyncTime = block.timestamp;
         }
+
+        // 返回指定账户的余额
         return super.balanceOf(account);
     }
 
     function _isAddLiquidity() internal view returns (bool isAdd) {
         ISwapPair mainPair = ISwapPair(_mainPair);
-        (uint r0, uint256 r1,) = mainPair.getReserves();
+        (uint reserve0, uint reserve1,) = mainPair.getReserves();
 
-        address tokenOther = currency;
-        uint256 r;
-        if (tokenOther < address(this)) {
-            r = r0;
+        // 获取此合约持有的货币代币余额（如 USDT 或 BNB）
+        uint balance = IERC20(currency).balanceOf(address(mainPair));
+
+        // 判断哪个代币是 this token 和 currency
+        if (currency == mainPair.token0()) {
+            // 如果 currency 是 token0，则比较 reserve0
+            isAdd = balance > reserve0;
         } else {
-            r = r1;
+            // 如果 currency 是 token1，则比较 reserve1
+            isAdd = balance > reserve1;
         }
-
-        uint bal = IERC20(tokenOther).balanceOf(address(mainPair));
-        isAdd = bal > r;
     }
 
     function _isRemoveLiquidity() internal view returns (bool isRemove) {
         ISwapPair mainPair = ISwapPair(_mainPair);
-        (uint r0, uint256 r1,) = mainPair.getReserves();
+        (uint reserve0, uint reserve1,) = mainPair.getReserves();
 
-        address tokenOther = currency;
-        uint256 r;
-        if (tokenOther < address(this)) {
-            r = r0;
+        // 获取此合约持有的货币代币余额
+        uint balance = IERC20(currency).balanceOf(address(mainPair));
+
+        // 判断哪个代币是 this token 和 currency
+        if (currency == mainPair.token0()) {
+            // 如果 currency 是 token0，则比较 reserve0
+            isRemove = reserve0 >= balance;
         } else {
-            r = r1;
+            // 如果 currency 是 token1，则比较 reserve1
+            isRemove = reserve1 >= balance;
         }
-
-        uint bal = IERC20(tokenOther).balanceOf(address(mainPair));
-        isRemove = r >= bal;
     }
 
-
     event Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        uint256 value
+    );
+    event Failed_swapSellReflow(
         uint256 value
     );
     event Failed_addLiquidity();
@@ -577,16 +611,30 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 手续费白名单
     function setFeeWhiteList(address account, bool status) external onlyOwner {
+        require(account != address(0), "Invalid address: cannot be zero address");
         _feeWhiteList[account] = status;
     }
 
     function getFeeWhiteList(address account) external view returns (bool) {
+        require(account != address(0), "Invalid address: cannot be zero address");
         return _feeWhiteList[account];
     }
 
 // 交换路由器实例
     function setSwapRouter(ISwapRouter router) external onlyOwner {
+        require(address(router) != address(0), "Invalid swap router address");
+
+        // Ensure the router supports the correct main pair
+        ISwapFactory swapFactory = ISwapFactory(router.factory());
+        require(
+            swapFactory.getPair(address(this), currency) != address(0),
+            "Router does not support the current token pair"
+        );
+
+        // Update the swap router
         _swapRouter = router;
+
+        emit SwapRouterUpdated(address(router));
     }
 
     function getSwapRouter() external view returns (ISwapRouter) {
@@ -595,6 +643,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 交易所使用的货币地址
     function setCurrency(address _currency) external onlyOwner {
+        require(_currency != address(0), "Invalid address: cannot be zero address");
         currency = _currency;
     }
 
@@ -604,6 +653,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 交换对列表
     function setSwapPairList(address pair, bool status) external onlyOwner {
+        require(pair != address(0), "Invalid address: cannot be zero address");
         _swapPairList[pair] = status;
     }
 
@@ -631,117 +681,98 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 代币分发器实例
     function setTokenDistributor(TokenDistributor distributor) external onlyOwner {
-        _tokenDistributor = distributor;
+        require(address(distributor) != address(0), "Invalid address: cannot be zero address");
+    _tokenDistributor = distributor;
     }
 
     function getTokenDistributor() external view returns (TokenDistributor) {
         return _tokenDistributor;
     }
 
-// 买入资金费用比例
-    function setBuyFundFee(uint256 fee) external onlyOwner {
-        _buyFundFee = fee;
+// 设置所有买入相关费用比例，并确保总费用比例不超过 50% (5000 基点)
+    function setBuyFees(
+        uint256 fundFee,
+        uint256 lpFee,
+        uint256 burnFee,
+        uint256 marketingFee
+    ) external onlyOwner {
+        uint256 MAX_TOTAL_FEE = 5000; // 定义最大总费用限制（5000 = 50%）
+
+        // 确保所有费用的总和不超过 50%
+        uint256 totalFee = fundFee + lpFee + burnFee + marketingFee;
+        require(totalFee <= MAX_TOTAL_FEE, "Total buy fees exceed maximum limit");
+
+        // 设置各项费用比例
+        _buyFundFee = fundFee;
+        _buyLPFee = lpFee;
+        buy_burnFee = burnFee;
+        _buyMarketingFee = marketingFee;
     }
 
-    function getBuyFundFee() external view returns (uint256) {
-        return _buyFundFee;
+// 获取所有买入相关费用
+    function getBuyFees() external view returns (
+        uint256 fundFee,
+        uint256 lpFee,
+        uint256 burnFee,
+        uint256 marketingFee
+    ) {
+        return (_buyFundFee, _buyLPFee, buy_burnFee, _buyMarketingFee);
+    }
+// 设置所有卖出相关费用比例，并确保总费用比例不超过 50% (5000 基点)
+    function setSellFees(
+        uint256 fundFee,
+        uint256 lpFee,
+        uint256 burnFee,
+        uint256 marketingFee,
+        uint256 reflowFee
+    ) external onlyOwner {
+        uint256 MAX_TOTAL_FEE = 5000; // 定义最大总费用限制（5000 = 50%）
+
+        // 确保所有费用的总和不超过 50%
+        uint256 totalFee = fundFee + lpFee + burnFee + marketingFee + reflowFee;
+        require(totalFee <= MAX_TOTAL_FEE, "Total sell fees exceed maximum limit");
+
+        // 设置各项费用比例
+        _sellFundFee = fundFee;
+        _sellLPFee = lpFee;
+        sell_burnFee = burnFee;
+        _sellMarketingFee = marketingFee;
+        _sellReflowFee = reflowFee;
     }
 
-// 买入流动性费用比例
-    function setBuyLPFee(uint256 fee) external onlyOwner {
-        _buyLPFee = fee;
+// 获取所有卖出相关费用
+    function getSellFees() external view returns (
+        uint256 fundFee,
+        uint256 lpFee,
+        uint256 burnFee,
+        uint256 marketingFee,
+        uint256 reflowFee
+    ) {
+        return (_sellFundFee, _sellLPFee, sell_burnFee, _sellMarketingFee, _sellReflowFee);
     }
 
-    function getBuyLPFee() external view returns (uint256) {
-        return _buyLPFee;
-    }
-
-// 买入销毁费用比例
-    function setBuyBurnFee(uint256 fee) external onlyOwner {
-        buy_burnFee = fee;
-    }
-
-    function getBuyBurnFee() external view returns (uint256) {
-        return buy_burnFee;
-    }
-
-// 买入营销费用比例
-    function setBuyMarketingFee(uint256 fee) external onlyOwner {
-        _buyMarketingFee = fee;
-    }
-
-    function getBuyMarketingFee() external view returns (uint256) {
-        return _buyMarketingFee;
-    }
-
-// 卖出资金费用比例
-    function setSellFundFee(uint256 fee) external onlyOwner {
-        _sellFundFee = fee;
-    }
-
-    function getSellFundFee() external view returns (uint256) {
-        return _sellFundFee;
-    }
-
-// 卖出流动性费用比例
-    function setSellLPFee(uint256 fee) external onlyOwner {
-        _sellLPFee = fee;
-    }
-
-    function getSellLPFee() external view returns (uint256) {
-        return _sellLPFee;
-    }
-
-// 卖出销毁费用比例
-    function setSellBurnFee(uint256 fee) external onlyOwner {
-        sell_burnFee = fee;
-    }
-
-    function getSellBurnFee() external view returns (uint256) {
-        return sell_burnFee;
-    }
-
-// 卖出营销费用比例
-    function setSellMarketingFee(uint256 fee) external onlyOwner {
-        _sellMarketingFee = fee;
-    }
-
-    function getSellMarketingFee() external view returns (uint256) {
-        return _sellMarketingFee;
-    }
-
-// 卖出回流费用比例
-    function setSellReflowFee(uint256 fee) external onlyOwner {
-        _sellReflowFee = fee;
-    }
-
-    function getSellReflowFee() external view returns (uint256) {
-        return _sellReflowFee;
-    }
-
-// 回流金额
-    function setReflowAmount(uint256 amount) external onlyOwner {
-        _reflowAmount = amount;
-    }
-
-    function getReflowAmount() external view returns (uint256) {
-        return _reflowAmount;
-    }
-
-// 增加流动性费用比例
+    // 设置增加流动性费用比例，确保不超过 10% (1000 基点)
     function setAddLiquidityFee(uint256 fee) external onlyOwner {
+        uint256 MAX_FEE = 1000; // 定义最大费用限制为 10%
+
+        require(fee <= MAX_FEE, "Add liquidity fee exceeds maximum limit of 10%");
         addLiquidityFee = fee;
     }
 
+// 获取增加流动性费用比例
     function getAddLiquidityFee() external view returns (uint256) {
         return addLiquidityFee;
     }
 
-// 移除流动性费用比例
+// 设置移除流动性费用比例，确保不超过 10% (1000 基点)
     function setRemoveLiquidityFee(uint256 fee) external onlyOwner {
+        uint256 MAX_FEE = 1000; // 定义最大费用限制为 10%
+
+        require(fee <= MAX_FEE, "Remove liquidity fee exceeds maximum limit of 10%");
         removeLiquidityFee = fee;
     }
 
+// 获取移除流动性费用比例
     function getRemoveLiquidityFee() external view returns (uint256) {
         return removeLiquidityFee;
     }
@@ -766,7 +797,20 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 主交易对地址
     function setMainPair(address pair) external onlyOwner {
+        require(pair != address(0), "Invalid main pair address");
+
+        // Ensure one of the tokens in the pair is the current contract (address(this))
+        ISwapPair swapPair = ISwapPair(pair);
+        require(
+            swapPair.token0() == address(this) || swapPair.token1() == address(this),
+            "Main pair must include this token"
+        );
+
+        // Update the main pair
         _mainPair = pair;
+        _swapPairList[_mainPair] = true;
+
+        emit MainPairUpdated(pair);
     }
 
     function getMainPair() external view returns (address) {
@@ -829,6 +873,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 资金地址
     function setFundAddress(address payable addr) external onlyOwner {
+        require(addr != address(0), "Invalid address: cannot be zero address");
         fundAddress = addr;
     }
 
@@ -838,6 +883,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
 // 销毁流动性地址
     function setBurnLiquidityAddress(address addr) external onlyOwner {
+        require(addr != address(0), "Invalid address: cannot be zero address");
         burnLiquidityAddress = addr;
     }
 
@@ -871,6 +917,10 @@ contract DBTCoinNew is ERC20, Ownable {
     function getLastUpdateTimestamp() external view returns (uint256) {
         return lastUpdateTimestamp;
     }
+
+    event MainPairUpdated(address mainPair);
+    event CurrencyUpdated(address currency, bool isEth);
+    event SwapRouterUpdated(address swapRouter);
 
 }
 
