@@ -55,10 +55,6 @@ contract DBTCoinNew is ERC20, Ownable {
 
     uint256 public _reflowAmount;
 
-    uint256 public addLiquidityFee;
-    // 增加流动性费用比例
-    uint256 public removeLiquidityFee;
-    // 移除流动性费用比例
 
     bool public currencyIsEth;
     // 货币是否为以太币（ETH）
@@ -189,15 +185,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
         bool takeFee;
         bool isSell;
-        bool isRemove;
-        bool isAdd;
-        if (_swapPairList[to]) {
-            isAdd = _isAddLiquidity();
 
-        } else if (_swapPairList[from]) {
-            isRemove = _isRemoveLiquidity();
-
-        }
 
         if (startTradeBlock == 0 && enableOffTrade) {
             if (
@@ -211,7 +199,7 @@ contract DBTCoinNew is ERC20, Ownable {
         }
 
         if (_swapPairList[from] || _swapPairList[to]) {
-            if (!_feeWhiteList[from] && !_feeWhiteList[to] && !isAdd && !isRemove) {
+            if (!_feeWhiteList[from] && !_feeWhiteList[to]) {
 
                 if (enableOffTrade) {
                     require(startTradeBlock > 0);
@@ -232,9 +220,7 @@ contract DBTCoinNew is ERC20, Ownable {
                 to,
                 amount,
                 takeFee,
-                isSell,
-                isAdd,
-                isRemove
+                isSell
             );
         }
 
@@ -247,9 +233,7 @@ contract DBTCoinNew is ERC20, Ownable {
         address recipient,
         uint256 tAmount,
         bool takeFee,
-        bool isSell,
-        bool isAdd,
-        bool isRemove
+        bool isSell
     ) private {
 
         uint256 sellBurnFee = isSell ? sell_burnFee : buy_burnFee;
@@ -269,25 +253,11 @@ contract DBTCoinNew is ERC20, Ownable {
                 (buyFee, amount) = allBuyFeeToAmount(tAmount);
                 allToFunder += buyFee;
             }
-        } else if (!isAdd && !isRemove && !_feeWhiteList[sender] && !_feeWhiteList[recipient]) {
+        } else if (!_feeWhiteList[sender] && !_feeWhiteList[recipient]) {
             transferAmount = tAmount * _tradeFee / 10000;
             amount = tAmount - transferAmount;
         }
 
-
-        if (isAdd) {
-            if (addLiquidityFee > 0) {
-                uint256 fee = amount * addLiquidityFee / 10000;
-                amount -= fee;
-                _basicTransfer(sender, address(this), fee);
-            }
-        } else if (isRemove) {
-            if (removeLiquidityFee > 0) {
-                uint256 fee = amount * removeLiquidityFee / 10000;
-                amount -= fee;
-                _basicTransfer(sender, address(this), fee);
-            }
-        }
 
         if (takeFee) {
             if (isSell) {
@@ -522,39 +492,7 @@ contract DBTCoinNew is ERC20, Ownable {
         return super.balanceOf(account);
     }
 
-    function _isAddLiquidity() internal view returns (bool isAdd) {
-        ISwapPair mainPair = ISwapPair(_mainPair);
-        (uint reserve0, uint reserve1,) = mainPair.getReserves();
 
-        // 获取此合约持有的货币代币余额（如 USDT 或 BNB）
-        uint balance = IERC20(currency).balanceOf(address(mainPair));
-
-        // 判断哪个代币是 this token 和 currency
-        if (currency == mainPair.token0()) {
-            // 如果 currency 是 token0，则比较 reserve0
-            isAdd = balance > reserve0;
-        } else {
-            // 如果 currency 是 token1，则比较 reserve1
-            isAdd = balance > reserve1;
-        }
-    }
-
-    function _isRemoveLiquidity() internal view returns (bool isRemove) {
-        ISwapPair mainPair = ISwapPair(_mainPair);
-        (uint reserve0, uint reserve1,) = mainPair.getReserves();
-
-        // 获取此合约持有的货币代币余额
-        uint balance = IERC20(currency).balanceOf(address(mainPair));
-
-        // 判断哪个代币是 this token 和 currency
-        if (currency == mainPair.token0()) {
-            // 如果 currency 是 token0，则比较 reserve0
-            isRemove = reserve0 >= balance;
-        } else {
-            // 如果 currency 是 token1，则比较 reserve1
-            isRemove = reserve1 >= balance;
-        }
-    }
 
     event Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint256 value
@@ -696,32 +634,6 @@ contract DBTCoinNew is ERC20, Ownable {
         uint256 reflowFee
     ) {
         return (_sellFundFee, _sellLPFee, sell_burnFee, _sellMarketingFee, _sellReflowFee);
-    }
-
-    // 设置增加流动性费用比例，确保不超过 10% (1000 基点)
-    function setAddLiquidityFee(uint256 fee) external onlyOwner {
-        uint256 MAX_FEE = 1000; // 定义最大费用限制为 10%
-
-        require(fee <= MAX_FEE, "Add liquidity fee exceeds maximum limit of 10%");
-        addLiquidityFee = fee;
-    }
-
-// 获取增加流动性费用比例
-    function getAddLiquidityFee() external view returns (uint256) {
-        return addLiquidityFee;
-    }
-
-// 设置移除流动性费用比例，确保不超过 10% (1000 基点)
-    function setRemoveLiquidityFee(uint256 fee) external onlyOwner {
-        uint256 MAX_FEE = 1000; // 定义最大费用限制为 10%
-
-        require(fee <= MAX_FEE, "Remove liquidity fee exceeds maximum limit of 10%");
-        removeLiquidityFee = fee;
-    }
-
-// 获取移除流动性费用比例
-    function getRemoveLiquidityFee() external view returns (uint256) {
-        return removeLiquidityFee;
     }
 
 
