@@ -21,10 +21,6 @@ contract DBTCoinNew is ERC20, Ownable {
     mapping(address => bool) public _swapPairList;
     // 交换对列表，记录支持交易的代币对
 
-
-    bool private inSwap;
-    // 交换状态标志，防止重入攻击
-
     uint256 private constant MAX = ~uint256(0);
     // 最大 uint256 值，用于代币授权和比较
 
@@ -517,22 +513,6 @@ contract DBTCoinNew is ERC20, Ownable {
         return _feeWhiteList[account];
     }
 
-// 交换路由器实例
-    function setSwapRouter(ISwapRouter router) external onlyOwner {
-        require(address(router) != address(0), "Invalid swap router address");
-
-        // Ensure the router supports the correct main pair
-        ISwapFactory swapFactory = ISwapFactory(router.factory());
-        require(
-            swapFactory.getPair(address(this), currency) != address(0),
-            "Router does not support the current token pair"
-        );
-
-        // Update the swap router
-        _swapRouter = router;
-
-        emit SwapRouterUpdated(address(router));
-    }
 
     function getSwapRouter() external view returns (ISwapRouter) {
         return _swapRouter;
@@ -553,22 +533,7 @@ contract DBTCoinNew is ERC20, Ownable {
     function getSwapPairList(address pair) external view returns (bool) {
         return _swapPairList[pair];
     }
-
-
-// 交换状态标志
-    function setInSwap(bool status) external onlyOwner {
-        inSwap = status;
-    }
-
-    function getInSwap() external view returns (bool) {
-        return inSwap;
-    }
-
-// 代币分发器实例
-    function setTokenDistributor(TokenDistributor distributor) external onlyOwner {
-        require(address(distributor) != address(0), "Invalid address: cannot be zero address");
-    _tokenDistributor = distributor;
-    }
+    
 
     function getTokenDistributor() external view returns (TokenDistributor) {
         return _tokenDistributor;
@@ -641,32 +606,6 @@ contract DBTCoinNew is ERC20, Ownable {
         return currencyIsEth;
     }
 
-// 开始交易的区块号
-    function setStartTradeBlock(uint256 blockNumber) external onlyOwner {
-        startTradeBlock = blockNumber;
-    }
-
-    function getStartTradeBlock() external view returns (uint256) {
-        return startTradeBlock;
-    }
-
-// 主交易对地址
-    function setMainPair(address pair) external onlyOwner {
-        require(pair != address(0), "Invalid main pair address");
-
-        // Ensure one of the tokens in the pair is the current contract (address(this))
-        ISwapPair swapPair = ISwapPair(pair);
-        require(
-            swapPair.token0() == address(this) || swapPair.token1() == address(this),
-            "Main pair must include this token"
-        );
-
-        // Update the main pair
-        _mainPair = pair;
-        _swapPairList[_mainPair] = true;
-
-        emit MainPairUpdated(pair);
-    }
 
     function getMainPair() external view returns (address) {
         return _mainPair;
@@ -715,11 +654,6 @@ contract DBTCoinNew is ERC20, Ownable {
 
     function getEnableOffTrade() external view returns (bool) {
         return enableOffTrade;
-    }
-
-// 总接收的资金数量
-    function setTotalFundAmountReceive(uint256 amount) external onlyOwner {
-        totalFundAmountReceive = amount;
     }
 
     function getTotalFundAmountReceive() external view returns (uint256) {
