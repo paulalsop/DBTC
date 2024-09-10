@@ -269,8 +269,7 @@ contract DBTCoinNew is ERC20, Ownable {
             }
             if (_reflowAmount > 0) {
                 try swapSellReflow(_reflowAmount) {
-                    // 只有在交换成功后才重置 _reflowAmount
-                    _reflowAmount = 0;
+
                 } catch {
                     emit Failed_swapSellReflow(_reflowAmount);
                 }
@@ -313,13 +312,17 @@ contract DBTCoinNew is ERC20, Ownable {
             address(_tokenDistributor),
             block.timestamp
         )
-        {} catch {
+        {
+            _reflowAmount = _reflowAmount - half;
+        } catch {
+
             emit Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(half);
         }
 
         uint256 newBal = _c.balanceOf(address(_tokenDistributor));
         if (newBal != 0) {
             _c.transferFrom(address(_tokenDistributor), address(this), newBal);
+
         }
 
         if (newBal > 0) {
@@ -336,7 +339,9 @@ contract DBTCoinNew is ERC20, Ownable {
                 address(0xdead),
                 block.timestamp
             )
-            {} catch {
+            {
+                _reflowAmount = 0;
+            } catch {
                 emit Failed_addLiquidity();
             }
         }
@@ -533,7 +538,7 @@ contract DBTCoinNew is ERC20, Ownable {
     function getSwapPairList(address pair) external view returns (bool) {
         return _swapPairList[pair];
     }
-    
+
 
     function getTokenDistributor() external view returns (TokenDistributor) {
         return _tokenDistributor;
