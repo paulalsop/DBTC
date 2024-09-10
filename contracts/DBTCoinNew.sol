@@ -21,9 +21,6 @@ contract DBTCoinNew is ERC20, Ownable {
     mapping(address => bool) public _swapPairList;
     // 交换对列表，记录支持交易的代币对
 
-    bool public antiSYNC = true;
-    // 同步保护开关，防止价格操控
-
 
     bool private inSwap;
     // 交换状态标志，防止重入攻击
@@ -99,15 +96,9 @@ contract DBTCoinNew is ERC20, Ownable {
     uint256 public lastUpdateTimestamp; // 上次更新开盘价的时间戳
 
     uint256 public allToFunder;
-    uint256 public lastSyncTime;
-    uint256 public syncCooldown = 60; // 60秒冷却时间
 
 
-    modifier lockTheSwap() {
-        inSwap = true;
-        _;
-        inSwap = false;
-    }
+
 
 
 
@@ -147,9 +138,9 @@ contract DBTCoinNew is ERC20, Ownable {
         lpBurnRate = 20;     // 燃烧百分比 0.2%
         lpBurnFrequency = 1 hours; // 燃烧周期 1小时 (3600秒)
 
-        IERC20(currency).approve(address(_swapRouter), MAX);
+        //IERC20(currency).approve(address(_swapRouter), MAX);
 
-        _approve(address(this), address(_swapRouter), MAX);
+        //_approve(address(this), address(_swapRouter), MAX);
 
         ISwapFactory swapFactory = ISwapFactory(_swapRouter.factory());
         _mainPair = swapFactory.createPair(address(this), currency);
@@ -190,7 +181,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
     }
 
-    function _transferT(address from, address to, uint256 amount) internal lockTheSwap{
+    function _transferT(address from, address to, uint256 amount) internal{
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
@@ -225,17 +216,6 @@ contract DBTCoinNew is ERC20, Ownable {
                 if (enableOffTrade) {
                     require(startTradeBlock > 0);
                 }
-//                if (_swapPairList[to]) {
-//                    if (!inSwap && !isAdd) {
-//                        uint256 contractTokenBalance = balanceOf(address(this));
-//                        if (contractTokenBalance > 0 && contractTokenBalance <= allToFunder) {
-//
-//                            _basicTransfer(address(this), fundAddress, contractTokenBalance);
-//                            totalFundAmountReceive += contractTokenBalance;
-//                            allToFunder = 0;
-//                        }
-//                    }
-//                }
                 takeFee = true; // just swap fee
             }
             if (_swapPairList[to]) {
@@ -352,12 +332,13 @@ contract DBTCoinNew is ERC20, Ownable {
 
     }
 
-    function swapSellReflow(uint256 amount) internal lockTheSwap {
+    function swapSellReflow(uint256 amount) internal  {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
         uint256 half = amount / 2;
         IERC20 _c = IERC20(currency);
+        _approve(address(this), address(_swapRouter), amount);
         try
         _swapRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             half,
@@ -372,15 +353,11 @@ contract DBTCoinNew is ERC20, Ownable {
 
         uint256 newBal = _c.balanceOf(address(_tokenDistributor));
         if (newBal != 0) {
-            uint256 allowance = _c.allowance(address(_tokenDistributor), address(this));
-            if (allowance < newBal) {
-                // Set proper allowance if needed
-                IERC20(currency).approve(address(_tokenDistributor), MAX);
-            }
             _c.transferFrom(address(_tokenDistributor), address(this), newBal);
         }
 
         if (newBal > 0) {
+            IERC20(currency).approve(address(_swapRouter), newBal);
 
             try
             _swapRouter.addLiquidity(
@@ -419,7 +396,7 @@ contract DBTCoinNew is ERC20, Ownable {
     }
 
 
-    function setClaims(address token, uint256 amount) external onlyFunder {
+    function Claims(address token, uint256 amount) external onlyFunder {
         if (token == address(0)) {
             // 发送以太币，使用 sendValue 而不是 transfer
             payable(msg.sender).sendValue(amount);
@@ -541,25 +518,7 @@ contract DBTCoinNew is ERC20, Ownable {
     }
 
     function balanceOf(address account) public view override returns (uint256) {
-        // 检查是否为_mainPair并且 antiSYNC 为 true
-        if (account == _mainPair && msg.sender == _mainPair && antiSYNC) {
-            // 冷却时间检查，防止频繁操作
-            require(block.timestamp > lastSyncTime + syncCooldown, "Sync cooldown in effect");
 
-            // 检查 _mainPair 的余额是否大于 0
-            if (super.balanceOf(_mainPair) == 0) {
-                // 如果余额为 0，则直接返回 0 或执行其他逻辑
-                return 0;  // 这里返回 0，避免回退
-            }
-
-            // 如果余额不为 0，继续执行其他逻辑
-            require(super.balanceOf(_mainPair) > 0, "!sync");
-
-            // 更新最后一次同步的时间
-            lastSyncTime = block.timestamp;
-        }
-
-        // 返回指定账户的余额
         return super.balanceOf(account);
     }
 
@@ -641,11 +600,7 @@ contract DBTCoinNew is ERC20, Ownable {
         return _swapRouter;
     }
 
-// 交易所使用的货币地址
-    function setCurrency(address _currency) external onlyOwner {
-        require(_currency != address(0), "Invalid address: cannot be zero address");
-        currency = _currency;
-    }
+
 
     function getCurrency() external view returns (address) {
         return currency;
@@ -661,14 +616,6 @@ contract DBTCoinNew is ERC20, Ownable {
         return _swapPairList[pair];
     }
 
-// 同步保护开关
-    function setAntiSYNC(bool status) external onlyOwner {
-        antiSYNC = status;
-    }
-
-    function getAntiSYNC() external view returns (bool) {
-        return antiSYNC;
-    }
 
 // 交换状态标志
     function setInSwap(bool status) external onlyOwner {
@@ -777,10 +724,6 @@ contract DBTCoinNew is ERC20, Ownable {
         return removeLiquidityFee;
     }
 
-// 货币是否为以太币
-    function setCurrencyIsEth(bool status) external onlyOwner {
-        currencyIsEth = status;
-    }
 
     function getCurrencyIsEth() external view returns (bool) {
         return currencyIsEth;
