@@ -7,8 +7,9 @@ import "./interface/ISwapRouter.sol";
 import "./interface/ISwapFactory.sol";
 import "./interface/ISwapPair.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract DBTCoinNew is ERC20, Ownable {
+contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
     mapping(address => bool) public _feeWhiteList;
     // 手续费白名单，白名单中的地址可以免除手续费
 
@@ -297,7 +298,7 @@ contract DBTCoinNew is ERC20, Ownable {
 
     }
 
-    function swapSellReflow(uint256 amount) internal  {
+    function swapSellReflow(uint256 amount) private nonReentrant{
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
