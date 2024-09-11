@@ -298,7 +298,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
 
     }
 
-    function swapSellReflow(uint256 amount) private nonReentrant{
+    function swapSellReflow(uint256 amount) internal nonReentrant{
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
