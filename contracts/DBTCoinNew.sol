@@ -269,11 +269,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
                 autoBurnLiquidityPairTokens();
             }
             if (_reflowAmount > 0) {
-                try swapSellReflow(_reflowAmount) {
-
-                } catch {
-                    emit Failed_swapSellReflow(_reflowAmount);
-                }
+                swapSellReflow(_reflowAmount);
             }
             if (transferAmount > 0) {
                 _basicTransfer(sender, fundAddress, transferAmount);
@@ -298,7 +294,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
 
     }
 
-    function swapSellReflow(uint256 amount) internal nonReentrant{
+    function swapSellReflow(uint256 amount) private nonReentrant{
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
