@@ -8,8 +8,9 @@ import "./interface/ISwapFactory.sol";
 import "./interface/ISwapPair.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
+contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
     mapping(address => bool) public _feeWhiteList;
     // 手续费白名单，白名单中的地址可以免除手续费
 
@@ -78,8 +79,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
     uint256 public totalFundAmountReceive;
     // 总接收的资金数量
 
-    address payable public fundAddress;
-    // 资金地址，用于接收资金的地址
+
 
     address public burnLiquidityAddress;
 
@@ -91,27 +91,44 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
     uint256 public allToFunder;
 
 
+    address public LPDividendsAddress;//流动性分红地址
+    address public MarketingAddress;//营销地址
+    address payable public fundAddress;//基金会地址
 
-
-
+    address public MintBDCReceiveAddress;//铸币BDC接收地址67200 ether
+    address public addLPLock30ReceiveAddress;//添加流动性锁仓30天接收地址 4200 ether
+    address public addLPLock60ReceiveAddress;//添加流动性锁仓60天接收地址 4200 ether
+    address public addLPLock90ReceiveAddress;//添加流动性锁仓90天接收地址 4200 ether
+    address public addLPLock365ReceiveAddress;//添加流动性锁仓365天接收地址 4200 ether
 
     constructor() ERC20('DBTCoin', 'DBTC') Ownable(msg.sender) {
 
 //        // 正式地址参数
-        fundAddress = payable(0x86845f569AF459ca95c032b9257E3B33a0582efC); // 营销钱包/基金会地址
+
         currency = 0x55d398326f99059fF775485246999027B3197955;           // 交易货币（例如USDT）的地址
         _swapRouter = ISwapRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E); // 交换路由器地址（例如PancakeSwap）
-        address ReceiveAddress = 0x86845f569AF459ca95c032b9257E3B33a0582efC; // 接收地址
-        burnLiquidityAddress = 0x127d17465b6f6f91e71cd7bFEd11b699832DcDfa; // 销毁流动性地址
-//
-        // 测试地址参数
-//        fundAddress = payable(0x86845f569AF459ca95c032b9257E3B33a0582efC); // 营销钱包/基金会地址
-//        currency = 0x50681730A1b42d274516DD744E8cD9652316BD46;           // 交易货币（例如USDT）的地址
-//        _swapRouter = ISwapRouter(0xD99D1c33F9fC3444f8101754aBC46c52416550D1); // 交换路由器地址（例如PancakeSwap）
-//        address ReceiveAddress = 0x50681730A1b42d274516DD744E8cD9652316BD46; // 接收地址
-//        burnLiquidityAddress = 0x127d17465b6f6f91e71cd7bFEd11b699832DcDfa; // 销毁流动性地址
 
-        _mint(fundAddress, 84000 * 10 ** decimals()); // 发行代币
+        burnLiquidityAddress = 0x374D9d8757A3771b53C2586f10464919b0ABBfE3; // 销毁流动性地址
+
+        fundAddress = payable(0x2f7689Ff67A1a77A39b912E923D6d4e7E40725Ae); // 营销钱包/基金会地址
+        LPDividendsAddress = 0x4B99EFb473A9e8E963EcF6b1863E29B6c85BeBd7;//流动性分红地址
+        MarketingAddress = 0x2dF69D052c76dc5DB26E6e87F32b66D318452e79;//营销地址
+        MintBDCReceiveAddress = 0x210D2043E23C8739Ac063fb28078d46C348C5be7;//铸币BDC接收地址67200 ether
+        addLPLock30ReceiveAddress = 0x04f0A1fdABd9f2DB3C25E1a857cB84Af45d4bA91;//添加流动性锁仓30天接收地址 4200 ether
+        addLPLock60ReceiveAddress = 0xC5cb3ce8161Ed6b3652a4916fE9BD6D2BE21bb3d;//添加流动性锁仓60天接收地址 4200 ether
+        addLPLock90ReceiveAddress = 0x8b547279468791F575189bc865FC8387f73A97B2;//添加流动性锁仓90天接收地址 4200 ether
+        addLPLock365ReceiveAddress = 0xF4a990E15406412f3e4494669D8b37d81DeeC952;//添加流动性锁仓365天接收地址 4200 ether
+
+
+        uint256 _mintAmount = 67200 * 10 ** decimals(); // 铸币数量
+        _mint(MintBDCReceiveAddress, _mintAmount); // 发行代币
+
+        uint256 _addLPLockAmount = 4200 * 10 ** decimals(); // 添加流动性锁仓数量
+
+        _mint(addLPLock30ReceiveAddress, _addLPLockAmount); // 发行代币
+        _mint(addLPLock60ReceiveAddress, _addLPLockAmount); // 发行代币
+        _mint(addLPLock90ReceiveAddress, _addLPLockAmount); // 发行代币
+        _mint(addLPLock365ReceiveAddress, _addLPLockAmount); // 发行代币
 
         // 买入税率 (3%)
         _buyFundFee = 100; // 基金税率 1%
@@ -141,11 +158,16 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
         _swapPairList[_mainPair] = true;
         // 白名单设置
         _feeWhiteList[fundAddress] = true; // 将资金地址添加到手续费白名单
-        _feeWhiteList[ReceiveAddress] = true; // 将接收地址添加到手续费白名单
         _feeWhiteList[address(this)] = true; // 将合约地址添加到手续费白名单
-        //_feeWhiteList[address(_swapRouter)] = true; // 将路由器地址添加到手续费白名单
         _feeWhiteList[msg.sender] = true; // 将发起交易的地址添加到手续费白名单
         _feeWhiteList[address(0xdead)] = true; // 将发起交易的地址添加到手续费白名单
+        _feeWhiteList[LPDividendsAddress] = true; // 将流动性分红地址添加到手续费白名单
+        _feeWhiteList[MarketingAddress] = true; // 将营销地址添加到手续费白名单
+        _feeWhiteList[MintBDCReceiveAddress] = true; // 将铸币BDC接收地址添加到手续费白名单
+        _feeWhiteList[addLPLock30ReceiveAddress] = true; // 将添加流动性锁仓30天接收地址添加到手续费白名单
+        _feeWhiteList[addLPLock60ReceiveAddress] = true; // 将添加流动性锁仓60天接收地址添加到手续费白名单
+        _feeWhiteList[addLPLock90ReceiveAddress] = true; // 将添加流动性锁仓90天接收地址添加到手续费白名单
+        _feeWhiteList[addLPLock365ReceiveAddress] = true; // 将添加流动性锁仓180天接收地址添加到手续费白名单
 
         // 其他布尔参数设置
         enableOffTrade = true; // 启用交易关闭功能
@@ -174,7 +196,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
 
     }
 
-    function _transferT(address from, address to, uint256 amount) internal{
+    function _transferT(address from, address to, uint256 amount) internal {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
         require(amount > 0, "Transfer amount must be greater than zero");
@@ -208,9 +230,9 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
             }
         }
 
-        if(_feeWhiteList[from] || _feeWhiteList[to]){
+        if (_feeWhiteList[from] || _feeWhiteList[to]) {
             _basicTransfer(from, to, amount);
-        }else{
+        } else {
 
             _tokenTransfer(
                 from,
@@ -220,7 +242,6 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
                 isSell
             );
         }
-
 
 
     }
@@ -240,9 +261,12 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
         uint256 amount;
         uint256 transferAmount;
         uint256 sellReflowFee;
+
+        updateOpeningPrice(getPrice());//更新开盘价
+
         if (takeFee) {
             if (isSell) {
-                updateOpeningPrice(getPrice());
+
                 (sellFee, burnFee, sellReflowFee, amount) = allSellFeeToAmount(tAmount, sellBurnFee);
                 _reflowAmount += sellReflowFee;
                 allToFunder += sellFee;
@@ -278,10 +302,8 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
 
             uint256 contractTokenBalance = balanceOf(address(this));
             if (contractTokenBalance > 0 && contractTokenBalance <= allToFunder) {
+                swapForFund(contractTokenBalance);
 
-                _basicTransfer(address(this), fundAddress, contractTokenBalance);
-                totalFundAmountReceive += contractTokenBalance;
-                allToFunder = 0;
             }
         }
 
@@ -294,7 +316,48 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
 
     }
 
-    function swapSellReflow(uint256 amount) private nonReentrant{
+    function swapForFund(uint256 amount) private nonReentrant {
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = currency;
+        IERC20 _c = IERC20(currency);
+        _approve(address(this), address(_swapRouter), amount);
+
+        uint256 before = IERC20(currency).balanceOf(address(this));
+
+
+
+        try
+        _swapRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            amount,
+            _calculateSwapToCurrencyAmount(amount),
+            path,
+            address(_tokenDistributor),
+            block.timestamp
+        )
+        {
+            uint256 after = IERC20(currency).balanceOf(address(this));
+            uint256 currencyAmount = after - before;
+            uint256 _toAmount = currencyAmount / 2;
+            SafeERC20.safeTransferFrom(IERC20(currency), address(_tokenDistributor), address(fundAddress), _toAmount);
+            SafeERC20.safeTransferFrom(IERC20(currency), address(_tokenDistributor), address(MarketingAddress), currencyAmount - _toAmount);
+            totalFundAmountReceive += amount;
+            allToFunder = 0;
+        } catch {
+
+            emit Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(amount);
+        }
+
+    }
+
+    function _calculateSwapToCurrencyAmount(uint256 amount) public view returns (uint256) {
+        uint256 price = getPrice();
+        uint256 Slippage = 2;//接受2个点滑点
+        price = amount * price / 10 ** decimals();
+        return price - price * Slippage / 100;
+    }
+
+    function swapSellReflow(uint256 amount) private nonReentrant {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
@@ -304,7 +367,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
         try
         _swapRouter.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             half,
-            0,
+            _calculateSwapToCurrencyAmount(half),
             path,
             address(_tokenDistributor),
             block.timestamp
@@ -380,7 +443,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
 
     event AutoNukeLP();
 
-    function burnLiquidityPairTokens() external onlyFunder{
+    function burnLiquidityPairTokens() external onlyFunder {
         require(block.timestamp >= lastLpBurnTime + lpBurnFrequency, "Not yet");
         autoBurnLiquidityPairTokens();
     }
@@ -431,7 +494,7 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
         }
         if (currentPrice < openingPrice) {
             dailyDropPercentage = (openingPrice - currentPrice) * 10000 / openingPrice;
-        }else{
+        } else {
             dailyDropPercentage = 0;
         }
 
@@ -491,7 +554,6 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
     }
 
 
-
     event Failed_swapExactTokensForTokensSupportingFeeOnTransferTokens(
         uint256 value
     );
@@ -519,7 +581,6 @@ contract DBTCoinNew is ERC20, Ownable,ReentrancyGuard {
     function getSwapRouter() external view returns (ISwapRouter) {
         return _swapRouter;
     }
-
 
 
     function getCurrency() external view returns (address) {
