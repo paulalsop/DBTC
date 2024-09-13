@@ -132,12 +132,12 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
         // 买入税率 (3%)
         _buyFundFee = 100; // 基金税率 1%
-        _buyLPFee = 100;   //回流税率 0%
+        _buyLPFee = 100;   //lp税率 0%
         _buyMarketingFee = 100; // 营销税率 1%
 
         // 卖出税率 (10%)
         _sellFundFee = 200; // 营销税率 6%
-        _sellLPFee = 200;   // 销毁税率 2%
+        _sellLPFee = 200;   // lp税率 2%
         sell_burnFee = 200; // 回流税率 2%
         _sellMarketingFee = 200; // 基金税率 2%
         _sellReflowFee = 200; // 回流税率 2%
@@ -267,10 +267,12 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         if (takeFee) {
             if (isSell) {
 
+                _basicTransfer(sender,LPDividendsAddress,amount * _sellLPFee / 10000);
                 (sellFee, burnFee, sellReflowFee, amount) = allSellFeeToAmount(tAmount, sellBurnFee);
                 _reflowAmount += sellReflowFee;
                 allToFunder += sellFee;
             } else {
+                _basicTransfer(sender,LPDividendsAddress,amount * _buyLPFee / 10000);
                 (buyFee, amount) = allBuyFeeToAmount(tAmount);
                 allToFunder += buyFee;
             }
@@ -474,7 +476,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
     }
 
     function allSellFee() public view returns (uint256) {
-        return _sellFundFee + _sellLPFee + _sellMarketingFee + _sellReflowFee;
+        return _sellFundFee  + _sellMarketingFee + _sellReflowFee;
     }
 
     function allSellFeeToAmount(uint256 amount, uint256 sellBurnFee) public view returns (uint256, uint256, uint256, uint256) {
@@ -534,7 +536,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
 
     function allBuyFee() public view returns (uint256) {
-        return _buyFundFee + _buyLPFee + _buyMarketingFee;
+        return _buyFundFee  + _buyMarketingFee;
     }
 
     function allBuyFeeToAmount(uint256 amount) public view returns (uint256, uint256) {
