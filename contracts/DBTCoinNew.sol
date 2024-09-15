@@ -280,14 +280,14 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
             if (isSell) {
 
                 uint256 _toSellLPFee = tAmount * _sellLPFee / 10000;
-                _basicTransfer(sender,LPDividendsAddress,tAmount * _toSellLPFee / 10000);
+                _basicTransfer(sender,LPDividendsAddress,_toSellLPFee);
                 (sellFee, burnFee, sellReflowFee, amount) = allSellFeeToAmount(tAmount, sellBurnFee);
                 _reflowAmount += sellReflowFee;
                 amount = amount - sellReflowFee;
                 allToFunder += sellFee;
             } else {
                 uint _toBuyLPFee = tAmount * _buyLPFee / 10000;
-                _basicTransfer(sender,LPDividendsAddress,tAmount * _buyLPFee / 10000);
+                _basicTransfer(sender,LPDividendsAddress,_toBuyLPFee);
                 (buyFee, amount) = allBuyFeeToAmount(tAmount);
                 amount = amount - _toBuyLPFee;
                 allToFunder += buyFee;
@@ -357,8 +357,9 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
             uint256 _after = IERC20(currency).balanceOf(address(_tokenDistributor));
             uint256 currencyAmount = _after - before;
             uint256 _toAmount = currencyAmount / 2;
-            SafeERC20.safeTransferFrom(IERC20(currency), address(_tokenDistributor), address(fundAddress), _toAmount);
-            SafeERC20.safeTransferFrom(IERC20(currency), address(_tokenDistributor), address(MarketingAddress), currencyAmount - _toAmount);
+            IERC20(currency).Transfer(address(_tokenDistributor), address(fundAddress), _toAmount);
+            SafeERC20.safeTransfer(IERC20(currency),  address(fundAddress), _toAmount);
+            SafeERC20.safeTransfer(IERC20(currency),  address(MarketingAddress), currencyAmount - _toAmount);
             totalFundAmountReceive += amount;
             allToFunder = 0;
         } catch {
@@ -510,7 +511,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
             openingPrice = currentPrice;
             lastUpdateTimestamp = block.timestamp;
         }
-        if (currentPrice < openingPrice) {
+        if (currentPrice < openingPrice && openingPrice > 0) {
             dailyDropPercentage = (openingPrice - currentPrice) * 10000 / openingPrice;
         } else {
             dailyDropPercentage = 0;
