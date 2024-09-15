@@ -357,7 +357,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
             uint256 _after = IERC20(currency).balanceOf(address(_tokenDistributor));
             uint256 currencyAmount = _after - before;
             uint256 _toAmount = currencyAmount / 2;
-            SafeERC20.safeTransferFrom(IERC20(currency), address(MarketingAddress), currencyAmount);
+            SafeERC20.safeTransferFrom(IERC20(currency),address(_tokenDistributor), address(this), currencyAmount);
             SafeERC20.safeTransfer(IERC20(currency),  address(fundAddress), _toAmount);
             SafeERC20.safeTransfer(IERC20(currency),  address(MarketingAddress), currencyAmount - _toAmount);
             totalFundAmountReceive += amount;
