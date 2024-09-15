@@ -108,17 +108,29 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         currency = 0x55d398326f99059fF775485246999027B3197955;           // 交易货币（例如USDT）的地址
         _swapRouter = ISwapRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E); // 交换路由器地址（例如PancakeSwap）
 
-        burnLiquidityAddress = 0x374D9d8757A3771b53C2586f10464919b0ABBfE3; // 销毁流动性地址
+        burnLiquidityAddress = 0xb2C910Db0B179F762b5386377D7BEfF484569d4F; // 销毁流动性地址
 
-        fundAddress = payable(0x2f7689Ff67A1a77A39b912E923D6d4e7E40725Ae); // 营销钱包/基金会地址
-        LPDividendsAddress = 0x4B99EFb473A9e8E963EcF6b1863E29B6c85BeBd7;//流动性分红地址
-        MarketingAddress = 0x2dF69D052c76dc5DB26E6e87F32b66D318452e79;//营销地址
-        MintBDCReceiveAddress = 0x210D2043E23C8739Ac063fb28078d46C348C5be7;//铸币BDC接收地址67200 ether
-        addLPLock30ReceiveAddress = 0x04f0A1fdABd9f2DB3C25E1a857cB84Af45d4bA91;//添加流动性锁仓30天接收地址 4200 ether
-        addLPLock60ReceiveAddress = 0xC5cb3ce8161Ed6b3652a4916fE9BD6D2BE21bb3d;//添加流动性锁仓60天接收地址 4200 ether
-        addLPLock90ReceiveAddress = 0x8b547279468791F575189bc865FC8387f73A97B2;//添加流动性锁仓90天接收地址 4200 ether
-        addLPLock365ReceiveAddress = 0xF4a990E15406412f3e4494669D8b37d81DeeC952;//添加流动性锁仓365天接收地址 4200 ether
+        fundAddress = payable(0xf020472864f7bA1AdCF4539ee5E2f54A66EDb25B); // 营销钱包/基金会地址
+        LPDividendsAddress = 0x4A0568f70364Cf0b950408C67C251a70aE73c231;//流动性分红地址
+        MarketingAddress = 0xf45e055D4A3067A7D82f537E4957ED222731c9Db;//营销地址
+        addLPLock30ReceiveAddress = 0xB1C91940e2E3723aFaeA1a90fC0D7a80650D3dAE;//添加流动性锁仓30天接收地址 4200 ether
+        addLPLock60ReceiveAddress = 0xa60D9b643605FA2b098eAad6A4aAFd1C6A090088;//添加流动性锁仓60天接收地址 4200 ether
+        addLPLock90ReceiveAddress = 0x6FA4c3bb2EECE16C3e09B13A1175A4CCf327F4d7;//添加流动性锁仓90天接收地址 4200 ether
+        addLPLock365ReceiveAddress = 0x15416dc80E151e0B932BcBC0F129f47738b474f3;//添加流动性锁仓365天接收地址 4200 ether
 
+        MintBDCReceiveAddress = 0xe4266A347399ce32C4ACE0E22f6650fE24E500d6;//铸币BDC接收地址67200 ether
+//
+//        burnLiquidityAddress = 0x374D9d8757A3771b53C2586f10464919b0ABBfE3; // 销毁流动性地址
+//
+//        fundAddress = payable(0x2f7689Ff67A1a77A39b912E923D6d4e7E40725Ae); // 营销钱包/基金会地址
+//        LPDividendsAddress = 0x4B99EFb473A9e8E963EcF6b1863E29B6c85BeBd7;//流动性分红地址
+//        MarketingAddress = 0x2dF69D052c76dc5DB26E6e87F32b66D318452e79;//营销地址
+//        MintBDCReceiveAddress = 0x4cd073CAc99a6087EAD8c149A22eE879f521CAfe;//铸币BDC接收地址67200 ether
+//        addLPLock30ReceiveAddress = 0x04f0A1fdABd9f2DB3C25E1a857cB84Af45d4bA91;//添加流动性锁仓30天接收地址 4200 ether
+//        addLPLock60ReceiveAddress = 0xC5cb3ce8161Ed6b3652a4916fE9BD6D2BE21bb3d;//添加流动性锁仓60天接收地址 4200 ether
+//        addLPLock90ReceiveAddress = 0x8b547279468791F575189bc865FC8387f73A97B2;//添加流动性锁仓90天接收地址 4200 ether
+//        addLPLock365ReceiveAddress = 0xF4a990E15406412f3e4494669D8b37d81DeeC952;//添加流动性锁仓365天接收地址 4200 ether
+//
 
         uint256 _mintAmount = 67200 * 10 ** decimals(); // 铸币数量
         _mint(MintBDCReceiveAddress, _mintAmount); // 发行代币
@@ -267,13 +279,17 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         if (takeFee) {
             if (isSell) {
 
-                _basicTransfer(sender,LPDividendsAddress,amount * _sellLPFee / 10000);
+                uint256 _toSellLPFee = tAmount * _sellLPFee / 10000;
+                _basicTransfer(sender,LPDividendsAddress,tAmount * _toSellLPFee / 10000);
                 (sellFee, burnFee, sellReflowFee, amount) = allSellFeeToAmount(tAmount, sellBurnFee);
                 _reflowAmount += sellReflowFee;
+                amount = amount - sellReflowFee;
                 allToFunder += sellFee;
             } else {
-                _basicTransfer(sender,LPDividendsAddress,amount * _buyLPFee / 10000);
+                uint _toBuyLPFee = tAmount * _buyLPFee / 10000;
+                _basicTransfer(sender,LPDividendsAddress,tAmount * _buyLPFee / 10000);
                 (buyFee, amount) = allBuyFeeToAmount(tAmount);
+                amount = amount - _toBuyLPFee;
                 allToFunder += buyFee;
             }
         } else if (!_feeWhiteList[sender] && !_feeWhiteList[recipient]) {
@@ -322,7 +338,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
-        IERC20 _c = IERC20(currency);
+        //IERC20 _c = IERC20(currency);
         _approve(address(this), address(_swapRouter), amount);
 
         uint256 before = IERC20(currency).balanceOf(address(this));
@@ -338,8 +354,8 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
             block.timestamp
         )
         {
-            uint256 after = IERC20(currency).balanceOf(address(this));
-            uint256 currencyAmount = after - before;
+            uint256 _after = IERC20(currency).balanceOf(address(_tokenDistributor));
+            uint256 currencyAmount = _after - before;
             uint256 _toAmount = currencyAmount / 2;
             SafeERC20.safeTransferFrom(IERC20(currency), address(_tokenDistributor), address(fundAddress), _toAmount);
             SafeERC20.safeTransferFrom(IERC20(currency), address(_tokenDistributor), address(MarketingAddress), currencyAmount - _toAmount);
