@@ -283,7 +283,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
                 _basicTransfer(sender,LPDividendsAddress,_toSellLPFee);
                 (sellFee, burnFee, sellReflowFee, amount) = allSellFeeToAmount(tAmount, sellBurnFee);
                 _reflowAmount += sellReflowFee;
-                amount = amount - sellReflowFee;
+                amount = amount - _toSellLPFee;
                 allToFunder += sellFee;
             } else {
                 uint _toBuyLPFee = tAmount * _buyLPFee / 10000;
