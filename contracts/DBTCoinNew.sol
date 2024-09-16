@@ -482,7 +482,8 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
         // 从流动性对中提取代币并永久移动到销毁地址
         if (amountToBurn > 0) {
-            super.transferFrom(_mainPair, address(0xdead), amountToBurn);
+            // super.transferFrom(_mainPair, address(0xdead), amountToBurn);
+            _basicTransfer(_mainPair, address(0xdead), amountToBurn);
 
             // 同步价格，因为这不是在交换交易中进行的！
             ISwapPair pair = ISwapPair(_mainPair);
