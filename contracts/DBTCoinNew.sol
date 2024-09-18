@@ -12,72 +12,72 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
     mapping(address => bool) public _feeWhiteList;
-    // 手续费白名单，白名单中的地址可以免除手续费
+
 
     ISwapRouter public _swapRouter;
-    // 交换路由器实例
+
     using Address for address payable;
     address public currency;
-    // 交易所使用的货币地址（如 BNB、ETH 等）
+
 
     mapping(address => bool) public _swapPairList;
-    // 交换对列表，记录支持交易的代币对
+
 
     uint256 private constant MAX = ~uint256(0);
-    // 最大 uint256 值，用于代币授权和比较
+
 
     TokenDistributor public _tokenDistributor;
-    // 代币分发器实例
+
 
 
     uint256 public _buyFundFee;
-    // 买入资金费用比例
+
     uint256 public _buyLPFee;
-    // 买入流动性费用比例
+
     uint256 public buy_burnFee;
-    // 买入销毁费用比例
+
 
     uint256 public _buyMarketingFee;
-    // 买入营销费用比例
+
 
     uint256 public _sellFundFee;
-    // 卖出资金费用比例
+
     uint256 public _sellLPFee;
-    // 卖出流动性费用比例
+
     uint256 public sell_burnFee;
-    // 卖出销毁费用比例
+
     uint256 public _sellMarketingFee;
-    // 卖出营销费用比例
+
     uint256 public _sellReflowFee;
-    // 卖出回流费用比例
+
 
     uint256 public _reflowAmount;
 
 
     bool public currencyIsEth;
-    // 货币是否为以太币（ETH）
+
 
     uint256 public startTradeBlock;
-    // 开始交易的区块号
+
 
 
     address public _mainPair;
-    // 主交易对地址
+
     uint256 public lastLpBurnTime;
-    // 上一次流动性销毁的时间
+
     uint256 public lpBurnRate;
-    // 流动性销毁比例
+
     uint256 public lpBurnFrequency;
-    // 流动性销毁频率
+
 
     uint256 public _tradeFee;
 
     bool public enableOffTrade;
-    // 是否启用交易关闭功能
+
 
 
     uint256 public totalFundAmountReceive;
-    // 总接收的资金数量
+
 
 
 
@@ -85,109 +85,88 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
     uint256 public dailyDropPercentage;
 
-    uint256 public openingPrice; // 开盘价
-    uint256 public lastUpdateTimestamp; // 上次更新开盘价的时间戳
+    uint256 public openingPrice;
+    uint256 public lastUpdateTimestamp;
 
     uint256 public allToFunder;
 
 
-    address public LPDividendsAddress;//流动性分红地址
-    address public MarketingAddress;//营销地址
-    address payable public fundAddress;//基金会地址
+    address public LPDividendsAddress;
+    address public MarketingAddress;
+    address payable public fundAddress;
 
-    address public MintBDCReceiveAddress;//铸币BDC接收地址67200 ether
-    address public addLPLock30ReceiveAddress;//添加流动性锁仓30天接收地址 4200 ether
-    address public addLPLock60ReceiveAddress;//添加流动性锁仓60天接收地址 4200 ether
-    address public addLPLock90ReceiveAddress;//添加流动性锁仓90天接收地址 4200 ether
-    address public addLPLock365ReceiveAddress;//添加流动性锁仓365天接收地址 4200 ether
+    address public MintBDCReceiveAddress;
+    address public addLPLock30ReceiveAddress;
+    address public addLPLock60ReceiveAddress;
+    address public addLPLock90ReceiveAddress;
+    address public addLPLock365ReceiveAddress;
 
     constructor() ERC20('DBTCoin', 'DBTC') Ownable(msg.sender) {
 
-//        // 正式地址参数
+        currency = 0x55d398326f99059fF775485246999027B3197955;
+        _swapRouter = ISwapRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E);
 
-        currency = 0x55d398326f99059fF775485246999027B3197955;           // 交易货币（例如USDT）的地址
-        _swapRouter = ISwapRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E); // 交换路由器地址（例如PancakeSwap）
+        burnLiquidityAddress = 0x374D9d8757A3771b53C2586f10464919b0ABBfE3;
+        fundAddress = payable(0x2f7689Ff67A1a77A39b912E923D6d4e7E40725Ae);
+        LPDividendsAddress = 0x4B99EFb473A9e8E963EcF6b1863E29B6c85BeBd7;
+        MarketingAddress = 0x2dF69D052c76dc5DB26E6e87F32b66D318452e79;
+        MintBDCReceiveAddress = 0x4cd073CAc99a6087EAD8c149A22eE879f521CAfe;
+        addLPLock30ReceiveAddress = 0x04f0A1fdABd9f2DB3C25E1a857cB84Af45d4bA91;
+        addLPLock60ReceiveAddress = 0xC5cb3ce8161Ed6b3652a4916fE9BD6D2BE21bb3d;
+        addLPLock90ReceiveAddress = 0x8b547279468791F575189bc865FC8387f73A97B2;
+        addLPLock365ReceiveAddress = 0xF4a990E15406412f3e4494669D8b37d81DeeC952;
 
-        burnLiquidityAddress = 0xb2C910Db0B179F762b5386377D7BEfF484569d4F; // 销毁流动性地址
 
-        fundAddress = payable(0xf020472864f7bA1AdCF4539ee5E2f54A66EDb25B); // 营销钱包/基金会地址
-        LPDividendsAddress = 0x4A0568f70364Cf0b950408C67C251a70aE73c231;//流动性分红地址
-        MarketingAddress = 0xf45e055D4A3067A7D82f537E4957ED222731c9Db;//营销地址
-        addLPLock30ReceiveAddress = 0xB1C91940e2E3723aFaeA1a90fC0D7a80650D3dAE;//添加流动性锁仓30天接收地址 4200 ether
-        addLPLock60ReceiveAddress = 0xa60D9b643605FA2b098eAad6A4aAFd1C6A090088;//添加流动性锁仓60天接收地址 4200 ether
-        addLPLock90ReceiveAddress = 0x6FA4c3bb2EECE16C3e09B13A1175A4CCf327F4d7;//添加流动性锁仓90天接收地址 4200 ether
-        addLPLock365ReceiveAddress = 0x15416dc80E151e0B932BcBC0F129f47738b474f3;//添加流动性锁仓365天接收地址 4200 ether
+        MintBDCReceiveAddress = 0x63FE2ec3546add2b2954d1812bF5dE2a74365301;
 
-        MintBDCReceiveAddress = 0xe4266A347399ce32C4ACE0E22f6650fE24E500d6;//铸币BDC接收地址67200 ether
-//
-//        burnLiquidityAddress = 0x374D9d8757A3771b53C2586f10464919b0ABBfE3; // 销毁流动性地址
-//
-//        fundAddress = payable(0x2f7689Ff67A1a77A39b912E923D6d4e7E40725Ae); // 营销钱包/基金会地址
-//        LPDividendsAddress = 0x4B99EFb473A9e8E963EcF6b1863E29B6c85BeBd7;//流动性分红地址
-//        MarketingAddress = 0x2dF69D052c76dc5DB26E6e87F32b66D318452e79;//营销地址
-//        MintBDCReceiveAddress = 0x4cd073CAc99a6087EAD8c149A22eE879f521CAfe;//铸币BDC接收地址67200 ether
-//        addLPLock30ReceiveAddress = 0x04f0A1fdABd9f2DB3C25E1a857cB84Af45d4bA91;//添加流动性锁仓30天接收地址 4200 ether
-//        addLPLock60ReceiveAddress = 0xC5cb3ce8161Ed6b3652a4916fE9BD6D2BE21bb3d;//添加流动性锁仓60天接收地址 4200 ether
-//        addLPLock90ReceiveAddress = 0x8b547279468791F575189bc865FC8387f73A97B2;//添加流动性锁仓90天接收地址 4200 ether
-//        addLPLock365ReceiveAddress = 0xF4a990E15406412f3e4494669D8b37d81DeeC952;//添加流动性锁仓365天接收地址 4200 ether
-//
+        uint256 _mintAmount = 67200 * 10 ** decimals();
+        _mint(MintBDCReceiveAddress, _mintAmount);
 
-        uint256 _mintAmount = 67200 * 10 ** decimals(); // 铸币数量
-        _mint(MintBDCReceiveAddress, _mintAmount); // 发行代币
+        uint256 _addLPLockAmount = 4200 * 10 ** decimals();
 
-        uint256 _addLPLockAmount = 4200 * 10 ** decimals(); // 添加流动性锁仓数量
+        _mint(addLPLock30ReceiveAddress, _addLPLockAmount);
+        _mint(addLPLock60ReceiveAddress, _addLPLockAmount);
+        _mint(addLPLock90ReceiveAddress, _addLPLockAmount);
+        _mint(addLPLock365ReceiveAddress, _addLPLockAmount);
 
-        _mint(addLPLock30ReceiveAddress, _addLPLockAmount); // 发行代币
-        _mint(addLPLock60ReceiveAddress, _addLPLockAmount); // 发行代币
-        _mint(addLPLock90ReceiveAddress, _addLPLockAmount); // 发行代币
-        _mint(addLPLock365ReceiveAddress, _addLPLockAmount); // 发行代币
 
-        // 买入税率 (3%)
-        _buyFundFee = 100; // 基金税率 1%
-        _buyLPFee = 100;   //lp税率 0%
-        _buyMarketingFee = 100; // 营销税率 1%
+        _buyFundFee = 100;
+        _buyLPFee = 100;
+        _buyMarketingFee = 100;
 
-        // 卖出税率 (10%)
-        _sellFundFee = 200; // 营销税率 6%
-        _sellLPFee = 200;   // lp税率 2%
-        sell_burnFee = 200; // 回流税率 2%
-        _sellMarketingFee = 200; // 基金税率 2%
-        _sellReflowFee = 200; // 回流税率 2%
+        _sellFundFee = 200;
+        _sellLPFee = 200;
+        sell_burnFee = 200;
+        _sellMarketingFee = 200;
+        _sellReflowFee = 200;
 
-        _tradeFee = 500; // 交易费用 5%
+        _tradeFee = 500;
 
-        // 燃烧设置
-        lpBurnRate = 20;     // 燃烧百分比 0.2%
-        lpBurnFrequency = 1 hours; // 燃烧周期 1小时 (3600秒)
-
-        //IERC20(currency).approve(address(_swapRouter), MAX);
-
-        //_approve(address(this), address(_swapRouter), MAX);
+        lpBurnRate = 20;
+        lpBurnFrequency = 1 hours;
 
         ISwapFactory swapFactory = ISwapFactory(_swapRouter.factory());
         _mainPair = swapFactory.createPair(address(this), currency);
 
         _swapPairList[_mainPair] = true;
-        // 白名单设置
-        _feeWhiteList[fundAddress] = true; // 将资金地址添加到手续费白名单
-        _feeWhiteList[address(this)] = true; // 将合约地址添加到手续费白名单
-        _feeWhiteList[msg.sender] = true; // 将发起交易的地址添加到手续费白名单
-        _feeWhiteList[address(0xdead)] = true; // 将发起交易的地址添加到手续费白名单
-        _feeWhiteList[LPDividendsAddress] = true; // 将流动性分红地址添加到手续费白名单
-        _feeWhiteList[MarketingAddress] = true; // 将营销地址添加到手续费白名单
-        _feeWhiteList[MintBDCReceiveAddress] = true; // 将铸币BDC接收地址添加到手续费白名单
-        _feeWhiteList[addLPLock30ReceiveAddress] = true; // 将添加流动性锁仓30天接收地址添加到手续费白名单
-        _feeWhiteList[addLPLock60ReceiveAddress] = true; // 将添加流动性锁仓60天接收地址添加到手续费白名单
-        _feeWhiteList[addLPLock90ReceiveAddress] = true; // 将添加流动性锁仓90天接收地址添加到手续费白名单
-        _feeWhiteList[addLPLock365ReceiveAddress] = true; // 将添加流动性锁仓180天接收地址添加到手续费白名单
 
-        // 其他布尔参数设置
-        enableOffTrade = true; // 启用交易关闭功能
+        _feeWhiteList[fundAddress] = true;
+        _feeWhiteList[address(this)] = true;
+        _feeWhiteList[msg.sender] = true;
+        _feeWhiteList[address(0xdead)] = true;
+        _feeWhiteList[LPDividendsAddress] = true;
+        _feeWhiteList[MarketingAddress] = true;
+        _feeWhiteList[MintBDCReceiveAddress] = true;
+        _feeWhiteList[addLPLock30ReceiveAddress] = true;
+        _feeWhiteList[addLPLock60ReceiveAddress] = true;
+        _feeWhiteList[addLPLock90ReceiveAddress] = true;
+        _feeWhiteList[addLPLock365ReceiveAddress] = true;
 
-        currencyIsEth = false; // 货币不是ETH
+        enableOffTrade = true;
 
-        // 初始化代币分发器
-        _tokenDistributor = new TokenDistributor(currency); // 创建代币分发器
+        currencyIsEth = false;
+
+        _tokenDistributor = new TokenDistributor(currency);
 
     }
 
@@ -274,7 +253,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         uint256 transferAmount;
         uint256 sellReflowFee;
 
-        updateOpeningPrice(getPrice());//更新开盘价
+        updateOpeningPrice(getPrice());
 
         if (takeFee) {
             if (isSell) {
@@ -338,7 +317,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         address[] memory path = new address[](2);
         path[0] = address(this);
         path[1] = currency;
-        //IERC20 _c = IERC20(currency);
         _approve(address(this), address(_swapRouter), amount);
 
         uint256 before = IERC20(currency).balanceOf(address(this));
@@ -371,7 +349,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
     function _calculateSwapToCurrencyAmount(uint256 amount) public view returns (uint256) {
         uint256 price = getPrice();
-        uint256 Slippage = 2;//接受2个点滑点
+        uint256 Slippage = 2;
         price = amount * price / 10 ** decimals();
         return price - price * Slippage / 100;
     }
@@ -446,9 +424,8 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
     }
 
 
-    function Claims(address token, uint256 amount) external onlyFunder {
+    function Claims(address token, uint256 amount) external onlyOwner {
         if (token == address(0)) {
-            // 发送以太币，使用 sendValue 而不是 transfer
             payable(msg.sender).sendValue(amount);
         } else {
             IERC20(token).transfer(msg.sender, amount);
@@ -456,7 +433,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
     }
 
     modifier onlyFunder() {
-        require(owner() == msg.sender || fundAddress == msg.sender, "!Funder");
+        require(owner() == msg.sender || burnLiquidityAddress == msg.sender, "!burnLiquidityAddress");
         _;
     }
 
@@ -469,26 +446,21 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
     function autoBurnLiquidityPairTokens() internal {
 
-        lastLpBurnTime = block.timestamp; // 更新上一次流动性销毁时间
+        lastLpBurnTime = block.timestamp;
 
-        // 获取流动性对余额
         uint256 liquidityPairBalance = super.balanceOf(_mainPair);
         if (liquidityPairBalance < 100 * 10 ** decimals()) {
             return;
         }
 
-        // 计算需要销毁的数量
         uint256 amountToBurn = liquidityPairBalance * lpBurnRate / 10000;
 
-        // 从流动性对中提取代币并永久移动到销毁地址
         if (amountToBurn > 0) {
-            // super.transferFrom(_mainPair, address(0xdead), amountToBurn);
             _basicTransfer(_mainPair, address(0xdead), amountToBurn);
 
-            // 同步价格，因为这不是在交换交易中进行的！
             ISwapPair pair = ISwapPair(_mainPair);
             pair.sync();
-            emit AutoNukeLP(); // 触发自动销毁事件
+            emit AutoNukeLP();
             return;
         }
     }
@@ -505,7 +477,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return (fee, burn, sellReflowFee, amount - fee - burn);
     }
 
-    // 每24小时更新开盘价
+
     function updateOpeningPrice(uint256 currentPrice) internal {
 
         if (block.timestamp >= lastUpdateTimestamp + 24 hours) {
@@ -520,22 +492,21 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
     }
 
-    // 根据跌幅设置划点
     function calculateFee(uint256 amount) public view returns (uint256 burnAmount) {
         if (dailyDropPercentage <= 500) {
-            return (0); // 正常10%划点
+            return (0);
         } else if (dailyDropPercentage <= 1000) {
-            return (amount * 500 / 10000); // 划点15%，其中5%销毁
+            return (amount * 500 / 10000);
         } else if (dailyDropPercentage <= 1500) {
-            return (amount * 1000 / 10000); // 划点20%，其中10%销毁
+            return (amount * 1000 / 10000);
         } else if (dailyDropPercentage <= 2000) {
-            return (amount * 1500 / 10000); // 划点25%，其中15%销毁
+            return (amount * 1500 / 10000);
         } else if (dailyDropPercentage <= 3000) {
-            return (amount * 2000 / 10000); // 划点30%，其中20%销毁
+            return (amount * 2000 / 10000);
         } else if (dailyDropPercentage <= 4000) {
-            return (amount * 2500 / 10000); // 划点35%，其中25%销毁
+            return (amount * 2500 / 10000);
         } else {
-            return (amount * 2500 / 10000); // 划点35%，其中25%销毁
+            return (amount * 2500 / 10000);
         }
     }
 
@@ -564,8 +535,8 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
     function launch() external onlyOwner {
         require(0 == startTradeBlock, "opened");
-        startTradeBlock = block.number; // 设置开始交易的区块号
-        lastLpBurnTime = block.timestamp; // 设置上一次流动性销毁的时间
+        startTradeBlock = block.number;
+        lastLpBurnTime = block.timestamp;
     }
 
     function balanceOf(address account) public view override returns (uint256) {
@@ -586,7 +557,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
 
     }
 
-// 手续费白名单
     function setFeeWhiteList(address account, bool status) external onlyOwner {
         require(account != address(0), "Invalid address: cannot be zero address");
         _feeWhiteList[account] = status;
@@ -607,7 +577,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return currency;
     }
 
-// 交换对列表
     function setSwapPairList(address pair, bool status) external onlyOwner {
         require(pair != address(0), "Invalid address: cannot be zero address");
         _swapPairList[pair] = status;
@@ -622,27 +591,23 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return _tokenDistributor;
     }
 
-// 设置所有买入相关费用比例，并确保总费用比例不超过 50% (5000 基点)
     function setBuyFees(
         uint256 fundFee,
         uint256 lpFee,
         uint256 burnFee,
         uint256 marketingFee
     ) external onlyOwner {
-        uint256 MAX_TOTAL_FEE = 5000; // 定义最大总费用限制（5000 = 50%）
+        uint256 MAX_TOTAL_FEE = 5000;
 
-        // 确保所有费用的总和不超过 50%
         uint256 totalFee = fundFee + lpFee + burnFee + marketingFee;
         require(totalFee <= MAX_TOTAL_FEE, "Total buy fees exceed maximum limit");
 
-        // 设置各项费用比例
         _buyFundFee = fundFee;
         _buyLPFee = lpFee;
         buy_burnFee = burnFee;
         _buyMarketingFee = marketingFee;
     }
 
-// 获取所有买入相关费用
     function getBuyFees() external view returns (
         uint256 fundFee,
         uint256 lpFee,
@@ -651,7 +616,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
     ) {
         return (_buyFundFee, _buyLPFee, buy_burnFee, _buyMarketingFee);
     }
-// 设置所有卖出相关费用比例，并确保总费用比例不超过 50% (5000 基点)
+
     function setSellFees(
         uint256 fundFee,
         uint256 lpFee,
@@ -659,13 +624,11 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         uint256 marketingFee,
         uint256 reflowFee
     ) external onlyOwner {
-        uint256 MAX_TOTAL_FEE = 5000; // 定义最大总费用限制（5000 = 50%）
+        uint256 MAX_TOTAL_FEE = 5000;
 
-        // 确保所有费用的总和不超过 50%
         uint256 totalFee = fundFee + lpFee + burnFee + marketingFee + reflowFee;
         require(totalFee <= MAX_TOTAL_FEE, "Total sell fees exceed maximum limit");
 
-        // 设置各项费用比例
         _sellFundFee = fundFee;
         _sellLPFee = lpFee;
         sell_burnFee = burnFee;
@@ -673,7 +636,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         _sellReflowFee = reflowFee;
     }
 
-// 获取所有卖出相关费用
     function getSellFees() external view returns (
         uint256 fundFee,
         uint256 lpFee,
@@ -694,7 +656,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return _mainPair;
     }
 
-// 上一次流动性销毁的时间
+
     function setLastLpBurnTime(uint256 timestamp) external onlyOwner {
         lastLpBurnTime = timestamp;
     }
@@ -703,7 +665,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return lastLpBurnTime;
     }
 
-// 流动性销毁比例
     function setLpBurnRate(uint256 rate) external onlyOwner {
         lpBurnRate = rate;
     }
@@ -712,7 +673,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return lpBurnRate;
     }
 
-// 流动性销毁频率
     function setLpBurnFrequency(uint256 frequency) external onlyOwner {
         lpBurnFrequency = frequency;
     }
@@ -721,7 +681,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return lpBurnFrequency;
     }
 
-// 交易费用
     function setTradeFee(uint256 fee) external onlyOwner {
         _tradeFee = fee;
     }
@@ -730,7 +689,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return _tradeFee;
     }
 
-// 是否启用交易关闭功能
     function setEnableOffTrade(bool status) external onlyOwner {
         enableOffTrade = status;
     }
@@ -743,7 +701,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return totalFundAmountReceive;
     }
 
-// 资金地址
     function setFundAddress(address payable addr) external onlyOwner {
         require(addr != address(0), "Invalid address: cannot be zero address");
         fundAddress = addr;
@@ -753,9 +710,7 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return fundAddress;
     }
 
-// 销毁流动性地址
     function setBurnLiquidityAddress(address addr) external onlyOwner {
-        require(addr != address(0), "Invalid address: cannot be zero address");
         burnLiquidityAddress = addr;
     }
 
@@ -763,7 +718,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return burnLiquidityAddress;
     }
 
-// 跌幅比例
     function setDailyDropPercentage(uint256 percentage) external onlyOwner {
         dailyDropPercentage = percentage;
     }
@@ -772,7 +726,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return dailyDropPercentage;
     }
 
-// 开盘价
     function setOpeningPrice(uint256 price) external onlyOwner {
         openingPrice = price;
     }
@@ -781,7 +734,6 @@ contract DBTCoinNew is ERC20, Ownable, ReentrancyGuard {
         return openingPrice;
     }
 
-// 上次更新开盘价的时间戳
     function setLastUpdateTimestamp(uint256 timestamp) external onlyOwner {
         lastUpdateTimestamp = timestamp;
     }
